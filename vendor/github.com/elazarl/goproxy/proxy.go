@@ -104,7 +104,7 @@ func removeProxyHeaders(ctx *ProxyCtx, r *http.Request) {
 	if r.Header.Get("Connection") == "close" {
 		r.Close = false
 	}
-	r.Header.Del("Connection")
+	// r.Header.Del("Connection")
 }
 
 type flushWriter struct {
