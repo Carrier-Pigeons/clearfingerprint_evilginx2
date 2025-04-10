@@ -1,9 +1,15 @@
 package goproxy
 
 import (
+	"bufio"
 	"crypto/tls"
+	"fmt"
+	"net"
 	"net/http"
 	"regexp"
+	"strings"
+
+	"github.com/kgretzky/evilginx2/log"
 )
 
 // ProxyCtx is the Proxy context, contains useful information about every request. It is passed to
@@ -40,10 +46,77 @@ func (f RoundTripperFunc) RoundTrip(req *http.Request, ctx *ProxyCtx) (*http.Res
 }
 
 func (ctx *ProxyCtx) RoundTrip(req *http.Request) (*http.Response, error) {
-	if ctx.RoundTripper != nil {
-		return ctx.RoundTripper.RoundTrip(req, ctx)
+	// if ctx.RoundTripper != nil {
+	// 	return ctx.RoundTripper.RoundTrip(req, ctx)
+	// }
+	// return ctx.Proxy.Tr.RoundTrip(req)
+
+	return sendRequestManually(req)
+}
+
+// This function sends the headers in unpredictable order each time, as the Request.Header map returns the keys in an unpredictable order each time, even when logging them. The function solves the problem of the Transport.RoundTime function alphabetizing the headers.
+func sendRequestManually(req *http.Request) (*http.Response, error) {
+
+	// Host header is not yet set.
+	req.Header.Set("Host", req.URL.Hostname())
+	// Ensure the host includes the port
+	if !strings.Contains(req.URL.Host, ":") {
+		if req.URL.Scheme == "https" {
+			req.URL.Host += ":443"
+		} else {
+			req.URL.Host += ":80"
+		}
 	}
-	return ctx.Proxy.Tr.RoundTrip(req)
+
+	log.Debug("Request URL: %s", req.URL.String())
+	log.Debug("Request Headers: %s", headersToString(req.Header))
+	var conn net.Conn
+	var err error
+
+	// Check if the request is HTTPS
+	if req.URL.Scheme == "https" {
+		conn, err = tls.Dial("tcp", req.URL.Host, &tls.Config{})
+	} else {
+		conn, err = net.Dial("tcp", req.URL.Host)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	// We do not close the connection, otherwise we cannot navigate the page after the first request.
+	// defer conn.Close()
+
+	// Write the request manually
+	fmt.Fprintf(conn, "%s %s HTTP/1.1\r\n", req.Method, req.URL.RequestURI())
+	for name, values := range req.Header {
+		for _, value := range values {
+			fmt.Fprintf(conn, "%s: %s\r\n", name, value)
+		}
+	}
+	fmt.Fprint(conn, "\r\n")
+
+	// Read the response
+	reader := bufio.NewReader(conn)
+	resp, err := http.ReadResponse(reader, req)
+	if err != nil {
+		log.Debug("Error reading response: %v", err)
+		return nil, err
+	}
+
+	log.Debug("Response Status: %s", resp.Status)
+	return resp, nil
+}
+
+// Note that this function does not return headers in order. The http.Header map does not guarantee order when iterating through its keys.
+func headersToString(headers http.Header) string {
+	var sb strings.Builder
+	for name, values := range headers {
+		for _, value := range values {
+			sb.WriteString(fmt.Sprintf("%s: %s\n", name, value))
+		}
+	}
+	return sb.String()
 }
 
 func (ctx *ProxyCtx) printf(msg string, argv ...interface{}) {
