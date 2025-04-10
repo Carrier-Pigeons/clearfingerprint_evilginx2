@@ -69,7 +69,7 @@ func sendRequestManually(req *http.Request) (*http.Response, error) {
 	}
 
 	log.Debug("Request URL: %s", req.URL.String())
-	log.Debug("Request Headers: %s", headersToString(req.Header))
+	// log.Debug("Request Headers: %s", headersToString(req.Header))	// The headers cannot be logged in the same order they are sent. Use this log only to validate which headers exist.
 	var conn net.Conn
 	var err error
 
